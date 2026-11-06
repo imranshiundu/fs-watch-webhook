@@ -1,50 +1,34 @@
 # fs-watch-webhook
 
-**fs-watch-webhook** watches a folder and sends file-change events to a webhook. It is useful for small automation jobs: rebuild triggers, sync alerts, backup signals, content publishing, or local development hooks.
+Watch a folder locally and POST an event payload to a webhook every time it changes —
+as a Node CLI or importable watcher.
 
-## Features
-
-- Watches a target directory
-- Debounces noisy file events
-- Optional glob-like ignore patterns
-- Adds event metadata: filename, full path, timestamp, host, process id
-- Retries failed webhook delivery
-- Dry-run mode for testing
-- Zero runtime dependencies
-
-## Usage
+## CLI
 
 ```bash
-WEBHOOK_URL="https://example.com/hook" node cli.js ./watched-folder
+node cli.js --root ./incoming --webhook https://example.com/hook
+node cli.js --root ./data --webhook https://example.com/hook --dry-run
+node cli.js --help
 ```
 
-Dry run:
+## Library
 
-```bash
-node cli.js ./watched-folder --dry-run
+```js
+import { startWatcher } from './index.js';
+
+startWatcher({
+  root: './incoming',
+  webhookUrl: 'https://example.com/hook',
+  debounceMs: 400,   // burst coalescing
+  ignore: [],        // filenames to skip
+  retries: 2,        // delivery attempts
+  // dryRun: true    // log payload instead of POSTing
+});
 ```
 
-Ignore common noisy files:
+## Delivery promise
 
-```bash
-node cli.js ./watched-folder --ignore node_modules --ignore .git --ignore .tmp
-```
-
-## Payload example
-
-```json
-{
-  "eventType": "rename",
-  "filename": "notes.md",
-  "fullPath": "/project/notes.md",
-  "happenedAt": "2026-04-30T12:00:00.000Z",
-  "host": "machine-name",
-  "pid": 12345
-}
-```
-
-## Development
-
-```bash
-npm test
-```
+- One file event → one **POST** with a JSON payload (filename, event, timestamp), after a 400 ms debounce.
+- Retries: configurable; runs until delivered or attempts are exhausted.
+- `--dry-run` / `dryRun: true` prints and logs the exact payload without POSTing it — safe to aim at a dev webhook.
+- Ignores sub-folder recursion deliberately (`recursive: false`), so deeper trees can be handled by nested watchers.
